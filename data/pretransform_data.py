@@ -21,8 +21,7 @@ LOCAL_CSV_MAPPER_FILE="/data/mapper/raw_movie_mapper.csv"
 print(f"Trying to access data at:\n{LOCAL_CSV_MOVIES_FILE}\n{LOCAL_CSV_REVIEWS_FILE}")
 
 spark = SparkSession.builder \
-    .appName("Movie Reviews Filtering") \
-    .config("spark.master", "spark://spark-master:7077") \
+    .appName("Data Pretransform") \
     .getOrCreate()
 
 df_reviews = spark.read.csv(path=LOCAL_CSV_REVIEWS_FILE, header=True, inferSchema=True)
@@ -83,9 +82,9 @@ df_movies = df_movies \
 df_movies.show()
 df_reviews.show()
 
-# print(f"Trying to overwrite MOVIES on the following path: {MOVIES_PATH}")
-# df_movies.write.csv(path=MOVIES_PATH, header=True, mode="overwrite")
-# print(f"Trying to overwrite REVIEWS on the following path: {REVIEWS_PATH}")
-# df_reviews.write.csv(path=REVIEWS_PATH, header=True, mode="overwrite")
-# print(f"Trying to overwrite MAPPER on the following path: {MAPPER_PATH}")
-# df_mapper.write.csv(path=MAPPER_PATH, header=True, mode="overwrite")
+print(f"Trying to overwrite MOVIES on the following path: {MOVIES_PATH}")
+df_movies.write.csv(path=MOVIES_PATH, header=True, mode="overwrite")
+print(f"Trying to overwrite REVIEWS on the following path: {REVIEWS_PATH}")
+df_reviews.write.csv(path=REVIEWS_PATH, header=True, mode="overwrite")
+print(f"Trying to overwrite MAPPER on the following path: {MAPPER_PATH}")
+df_mapper.write.csv(path=MAPPER_PATH, header=True, mode="overwrite")
