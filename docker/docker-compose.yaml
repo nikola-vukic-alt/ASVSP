@@ -7,7 +7,7 @@ services:
     container_name: namenode
     volumes:
       - hadoop_namenode:/hadoop/dfs/name
-      - ./bash-scripts/namenode/:/bash/
+      - ./bash-scripts/namenode/:/scripts/
     environment:
       - CLUSTER_NAME=asvsp
     env_file:
@@ -49,6 +49,7 @@ services:
       - ./hadoop.env
     volumes:
       - ../data:/data
+      - ../batch-queries:/batch-queries
 
   spark-worker1:
     image: bde2020/spark-worker:3.0.1-hadoop3.2

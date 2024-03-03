@@ -1,40 +1,32 @@
 from os import environ
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode, split, regexp_replace, col
-from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 from datetime import datetime, date
+
+spark = SparkSession.builder.appName("Batch Query 3").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
 MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
 REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/reviews/"
 OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/"
-    
-spark = SparkSession \
-    .builder \
-    .appName("Batch Query 1") \
-    .getOrCreate()
-
-spark.sparkContext.setLogLevel("ERROR")
-ELASTIC_SEARCH_INDEX = "batch_query_1"
+ELASTIC_SEARCH_INDEX = "batch_query_3"
 
 df_movies = spark.read.csv(path=MOVIES_PATH, header=True, inferSchema=True)
 df_reviews = spark.read.csv(path=REVIEWS_PATH, header=True, inferSchema=True)
 
-# Koji su najkritikovaniji zanrovi filmova za posljednjih 15 godina?
-df = df_movies.join(df_reviews, "movie_id") \
-    .withColumn("genre", explode(split(regexp_replace("genre", "\s*,\s*", ","), ","))) \
-    .groupBy("creationDate", "genre") \
-    .count()
+df_movies = df_movies.withColumn("writer", explode(split(regexp_replace("writer", "\s*,\s*", ","), ",")))
 
-windowSpec = Window.partitionBy("creationDate").orderBy(F.desc("count"))
-df = df.withColumn("rank", F.rank().over(windowSpec)) \
-    .filter(col("rank") == 1) \
-    .select("creationDate", "genre", "count") \
-    .orderBy(F.desc("count")) \
-    .limit(15)
+# Ko su pisci ciji su filmovi ostvarili najvecu zaradu od bioskopa, i kolika je ta zarada?
+df = df_movies \
+    .dropna(subset=["writer"]) \
+    .groupBy("writer") \
+    .agg((F.sum("boxOffice") / 1e9).alias("total_box_office_in_billions")) \
+    .orderBy(F.desc("total_box_office_in_billions")) \
+    .limit(5)
 
-print("QUERY: Koji su najkritikovaniji zanrovi filmova za posljednjih 15 godina?\n")
+print("QUERY: Ko su pisci ciji su filmovi ostvarili najvecu zaradu od bioskopa, i kolika je ta zarada?\n")
 df.show()
 
 df.write.json(OUTPUT_PATH + ELASTIC_SEARCH_INDEX, mode="overwrite")
@@ -56,6 +48,7 @@ df.write \
     .option('es.batch.write.retry.wait', '10s') \
     .save(ELASTIC_SEARCH_INDEX)
 
+# Print information
 current_date = date.today().strftime("%Y/%m/%d")
 current_time = datetime.now().strftime("%H:%M:%S")
 print(f"{current_date[2:]} {current_time} INFO Added new index: '{ELASTIC_SEARCH_INDEX}'.")
