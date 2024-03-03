@@ -5,29 +5,41 @@ from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 from datetime import datetime, date
 
-spark = SparkSession.builder.appName("Batch Query 5").getOrCreate()
+spark = SparkSession.builder.appName("Batch Query 6").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
 MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
 REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/reviews/"
 OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/"
-ELASTIC_SEARCH_INDEX = "batch_query_5"
+ELASTIC_SEARCH_INDEX = "batch_query_6"
 
 df_movies = spark.read.csv(path=MOVIES_PATH, header=True, inferSchema=True)
 df_reviews = spark.read.csv(path=REVIEWS_PATH, header=True, inferSchema=True)
 
-df_reviews_filtered = df_reviews.filter((col("creationDate") >= 2020) & (col("creationDate") < 2022))
+df_positive_reviews = df_reviews.filter(col("scoreSentiment") == "POSITIVE")
 
-df_movies_directors = df_movies.withColumn("director", explode(split(regexp_replace("director", "\s*,\s*", ","), ",")))
+df_review_counts = df_positive_reviews.groupBy("movie_id").agg(F.count("*").alias("total_reviews"))
 
-df_join = df_reviews_filtered.join(df_movies_directors, df_reviews_filtered["movie_id"] == df_movies_directors["movie_id"])
+df_positive_review_counts = df_positive_reviews.groupBy("movie_id").agg(F.count("*").alias("positive_reviews"))
 
-df_director_reviews = df_join.groupBy("director").agg(F.count("*").alias("num_reviews"))
+df_review_counts = df_review_counts.join(df_positive_review_counts, "movie_id", "left")
 
-df_top_directors = df_director_reviews.orderBy(F.desc("num_reviews")).limit(5)
+df_review_counts = df_review_counts.withColumn("positive_review_percentage", 
+                                               F.col("positive_reviews") / F.col("total_reviews") * 100)
 
-print("QUERY: Koji su bili najpopularniji reditelji za kritiku za vrijeme 'korona lockdown-a'?\n")
+df_review_counts = df_review_counts.filter(F.col("total_reviews") >= 100)
+
+window_spec = Window.orderBy(F.desc("total_reviews"))
+df_ranked_movies = df_review_counts.withColumn("rank", F.rank().over(window_spec))
+
+df_directors = df_ranked_movies.join(df_movies.select("movie_id", "director", "title"), "movie_id", "inner")
+
+df_top_directors = df_directors.filter(F.col("rank") <= 5).select("director", "positive_review_percentage", "title", "total_reviews")
+
+df_top_directors = df_top_directors.dropDuplicates()
+
+print("QUERY: Ko su reditelji filmova sa top 5 najvecih procenata pozitivnih utisaka a da imaju barem 100 kritika?\n")
 df_top_directors.show()
 
 df_top_directors.write.json(OUTPUT_PATH + ELASTIC_SEARCH_INDEX, mode="overwrite")

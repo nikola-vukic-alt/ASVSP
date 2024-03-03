@@ -4,6 +4,7 @@ from pyspark.sql.functions import explode, split, regexp_replace, col
 from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 from datetime import datetime, date
+import time
 
 spark = SparkSession.builder.appName("Batch Query 4").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
@@ -19,13 +20,20 @@ df_reviews = spark.read.csv(path=REVIEWS_PATH, header=True, inferSchema=True)
 
 df_movies = df_movies.withColumn("writer", explode(split(regexp_replace("writer", "\s*,\s*", ","), ",")))
 
-df_certified = df_reviews.groupBy("movie_id").agg(
-    F.count(F.when(col("scoreSentiment") == "POSITIVE", True)).alias("positive_reviews"),
-    F.sum(F.when(col("isTopCritic") == True, 1).otherwise(0)).alias("top_critic_reviews")
-)
+df_certified = df_reviews \
+    .dropna(how='any', subset=['isTopCritic']) \
+    .groupBy("movie_id").agg(
+        F.count(F.when(col("scoreSentiment") == "POSITIVE", True)).alias("positive_reviews"),
+        F.count(F.when(col("isTopCritic") == True, True)).alias("top_critic_reviews"),
+        F.count("*").alias("total_reviews")
+    )
+
+# df_certified.select("movie_id", "positive_reviews", "top_critic_reviews", "total_reviews").orderBy(col("total_reviews").desc()).show()
+
+# time.sleep(5)
 
 df_certified = df_certified.filter(
-    (col("positive_reviews") / col("top_critic_reviews")) >= 0.75) \
+    (col("positive_reviews") / col("total_reviews")) >= 0.75) \
     .filter(col("top_critic_reviews") >= 5) \
     .filter(col("positive_reviews") >= 80)
 

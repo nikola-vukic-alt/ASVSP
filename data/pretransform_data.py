@@ -6,6 +6,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 import random
 import os
+import time
 
 print("Current working directory:", os.getcwd())
 
@@ -45,24 +46,14 @@ def fix_reviews(df_reviews: DataFrame) -> DataFrame:
 
     fix_sentiment_udf = udf(fix_sentiment)
     df_reviews = df_reviews.withColumn("scoreSentiment", fix_sentiment_udf("scoreSentiment"))
-    def fix_top_critic(value):
-        top_critic = [True, False]
-        if value not in top_critic:
-            return False
-        else: 
-            return value
-
-    fix_top_critic_udf = udf(fix_top_critic)
-    df_reviews = df_reviews.withColumn("isTopCritic", fix_top_critic_udf("isTopCritic"))
 
     return df_reviews
 
 df_reviews = fix_reviews(df_reviews)
 df_reviews = df_reviews.drop('criticName', 'reviewText', 'reviewUrl', 'publicatioName', 'reviewState')
 df_reviews = df_reviews.withColumn("creationDate", year("creationDate"))
-df_reviews = df_reviews \
-    .withColumnRenamed("id", "movie_id") \
-    
+df_reviews = df_reviews.withColumnRenamed("id", "movie_id")
+
 df_mapper = spark.read.csv(path=LOCAL_CSV_MAPPER_FILE, header=True, inferSchema=True)
 df_mapper = df_mapper.drop('cast', 'crew')
 

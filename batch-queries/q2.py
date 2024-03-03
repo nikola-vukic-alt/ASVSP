@@ -54,7 +54,6 @@ df.write \
     .option('es.batch.write.retry.wait', '10s') \
     .save(ELASTIC_SEARCH_INDEX)
 
-# Print information
 current_date = date.today().strftime("%Y/%m/%d")
 current_time = datetime.now().strftime("%H:%M:%S")
 print(f"{current_date[2:]} {current_time} INFO Added new index: '{ELASTIC_SEARCH_INDEX}'.")
