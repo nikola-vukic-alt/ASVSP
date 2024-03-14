@@ -43,13 +43,14 @@ services:
       - 8080:8080
       - 7077:7077
     environment: 
-      - PYSPARK_PYTHON=python3
+      - PYSPARf_PYTHON=python3
       - KAFKA_BROKER=kafka:19092
     env_file:
       - ./hadoop.env
     volumes:
       - ../data:/data
       - ../batch-queries:/batch-queries
+      - ../streaming:/streaming
 
   spark-worker1:
     image: bde2020/spark-worker:3.0.1-hadoop3.2
