@@ -11,12 +11,12 @@ ELASTIC_SEARCH_USERNAME = environ.get("ELASTIC_SEARCH_USERNAME", "elastic")
 ELASTIC_SEARCH_PASSWORD = environ.get("ELASTIC_SEARCH_PASSWORD", "password")
 ELASTIC_SEARCH_PORT = environ.get("ELASTIC_SEARCH_PORT", "9200")
 
-ELASTIC_SEARCH_INDEX = "streaming_query_1"
+ELASTIC_SEARCH_INDEX = "streaming_query_2"
 
 def save_data(df, ELASTIC_SEARCH_INDEX):
     df \
         .writeStream \
-        .outputMode("complete") \
+        .outputMode("update") \
         .format("console") \
         .option("truncate", "false") \
         .start()
@@ -42,7 +42,7 @@ def quiet_logs(sc):
 
 spark = SparkSession \
     .builder \
-    .appName("Most Rated Movies") \
+    .appName("Reviewed Genres") \
     .getOrCreate()
 
 quiet_logs(spark)
@@ -52,7 +52,7 @@ schema = StructType([
     StructField("userId", IntegerType(), True),
     StructField("movieId", IntegerType(), True),
     StructField("title", StringType(), True),
-    StructField("rating", DoubleType(), True),
+    StructField("genres", StringType(), True),
     StructField("timestamp", TimestampType(), True)  
 ])
 
@@ -68,17 +68,20 @@ reviews = spark \
 reviews = reviews.withColumn("value", col("value").cast("string"))
 
 # Parse the JSON data from the value column
-reviews = reviews.select(from_json(col("value"), schema).alias("review")).select("review.*")
+reviews = reviews.withColumn("jsonData", from_json(col("value"), schema)).select("jsonData.*")
 
-# Koji filmovi kritikovani u prethodnih 3 minuta? Azurirano svakih 30 sekundi.
+# Split the genres field and explode it into separate genre entries
+reviews = reviews.withColumn("genre", explode(split(trim(col("genres")), "\\|")))
+
+# Zanrovi kritikovani u prethodnih 3 minuta, sa azuriranjima na svakih 30 sekundi
 review_counts = reviews \
     .withWatermark("timestamp", "3 minutes") \
-    .groupBy(window("timestamp", "3 minutes", "30 seconds"), "movieId", "title") \
-    .count()
+    .groupBy(
+        window(col("timestamp"), "3 minutes", "30 seconds"),
+        col("genre")
+    ) \
+    .count() \
 
-top_movies = review_counts \
-    .limit(20)  
-
-save_data(top_movies, ELASTIC_SEARCH_INDEX)
+save_data(review_counts, ELASTIC_SEARCH_INDEX)
 
 spark.streams.awaitAnyTermination()
