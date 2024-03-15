@@ -1,0 +1,21 @@
+def save_data(df, ELASTIC_SEARCH_INDEX):
+    console_query = df.writeStream \
+        .outputMode("append") \
+        .format("console") \
+        .option("truncate", "false") \
+        .start()
+
+    es_query = df.writeStream \
+        .outputMode("append") \
+        .option("checkpointLocation", "/tmp/EL_" + ELASTIC_SEARCH_INDEX) \
+        .format('org.elasticsearch.spark.sql') \
+        .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \
+        .option("es.net.http.auth.pass", ELASTIC_SEARCH_PASSWORD) \
+        .option("mergeSchema", "true") \
+        .option('es.index.auto.create', 'true') \
+        .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
+        .option('es.port', ELASTIC_SEARCH_PORT) \
+        .option('es.batch.write.retry.wait', '100s') \
+        .start(ELASTIC_SEARCH_INDEX)
+
+    return console_query, es_query

@@ -1,5 +1,6 @@
 from os import environ
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Row
+from datetime import datetime
 from kafka import KafkaProducer
 import kafka.errors
 import time
@@ -15,8 +16,17 @@ KAFKA_CONFIGURATION = {
 def send_partition_to_kafka(partition):
     producer = KafkaProducer(**KAFKA_CONFIGURATION)
     for row in partition:
-        key = f"{row['userId']}_{row['movieId']}_{row['timestamp']}"
-        value = row.asDict(True)
+        # Convert Row to dictionary
+        row_dict = row.asDict()
+        # Format current time
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Add current time to the row dictionary
+        row_dict["timestamp"] = current_time
+        # Convert back to Row object
+        updated_row = Row(**row_dict)
+        
+        key = f"{updated_row['userId']}_{updated_row['movieId']}_{updated_row['timestamp']}"
+        value = updated_row.asDict()
         
         print(f"Sending to Kafka - Key: {key}, Value: {value}")
         
