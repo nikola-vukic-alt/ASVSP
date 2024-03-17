@@ -11,7 +11,7 @@ ELASTIC_SEARCH_USERNAME = environ.get("ELASTIC_SEARCH_USERNAME", "elastic")
 ELASTIC_SEARCH_PASSWORD = environ.get("ELASTIC_SEARCH_PASSWORD", "password")
 ELASTIC_SEARCH_PORT = environ.get("ELASTIC_SEARCH_PORT", "9200")
 
-ELASTIC_SEARCH_INDEX = "streaming_query_4"
+ELASTIC_SEARCH_INDEX = "streaming_query_5"
 
 def save_data(df, ELASTIC_SEARCH_INDEX):
     df \
@@ -82,25 +82,22 @@ MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
 
 df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
 
-# UDF to split the writers column
-split_writers_udf = udf(lambda x: x.split(",") if x else [], ArrayType(StringType()))
-
-# Apply UDF to split writers column
-df_movies = df_movies.withColumn("writers_split", split_writers_udf("writer"))
-
-# Pisci filmova koji su kritikovani u prethodnih 10 minuta. Azurirano svakih 30 sekundi.
+# Ocjena filma na rotten tomatoes od strane publike (batch, normalizovana na 1-5 opseg) vs 
+# ocjena filma od strane publike na IMDB (streaming u prethodnih 10 minuta). Azurirano svakih 30 sekundi.
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
         window(col("timestamp"), "10 minutes").alias("window"),
-        explode("writers_split").alias("wrtier_name"),
-        col("rating").cast("float").alias("rating")
+        col("title"),
+        (col("audienceScore") / 20.0).alias("rotten_tomatoes_rating"),
+        col("rating").cast("float").alias("imdb_rating")
     ) \
+    .na.drop() \
     .withWatermark("window", "10 minutes") \
-    .groupBy("window", "wrtier_name") \
+    .groupBy("window", "title") \
     .agg(
-        count("rating").alias("review_count"),
-        round(avg("rating"), 2).alias("avg_rating")
+        round(avg("rotten_tomatoes_rating"), 2).alias("avg_rotten_tomatoes_rating"),
+        round(avg("imdb_rating"), 2).alias("avg_imdb_rating")
     ) 
 
 save_data(review_ratings, ELASTIC_SEARCH_INDEX)
