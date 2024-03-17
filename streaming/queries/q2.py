@@ -35,6 +35,13 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option('es.batch.write.retry.wait', '100s') \
         .start(ELASTIC_SEARCH_INDEX)
     
+    df.writeStream \
+        .outputMode("append") \
+        .format("parquet") \
+        .option("path", OUTPUT_PATH + ELASTIC_SEARCH_INDEX) \
+        .option("checkpointLocation", "/tmp/" + ELASTIC_SEARCH_INDEX) \
+        .start()
+    
 def quiet_logs(sc):
     logger = sc._jvm.org.apache.log4j
     logger.LogManager.getLogger("org").setLevel(logger.Level.ERROR)
