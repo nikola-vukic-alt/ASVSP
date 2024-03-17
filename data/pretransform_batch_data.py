@@ -1,12 +1,12 @@
 from os import environ
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, year
+from pyspark.sql.functions import udf, year, when, col
 from pyspark.sql.types import FloatType
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 import random
 import os
-import time
+import time 
 
 print("Current working directory:", os.getcwd())
 
@@ -14,13 +14,14 @@ HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
 
 MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
 REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/reviews/"
-MAPPER_PATH = HDFS_NAMENODE + "/asvsp/raw/mapper/"
 
 LOCAL_CSV_MOVIES_FILE="/data/batch/raw_rotten_tomatoes_movies.csv"
 LOCAL_CSV_REVIEWS_FILE="/data/batch/raw_rotten_tomatoes_movie_reviews.csv"
 LOCAL_CSV_MAPPER_FILE="/data/mapper/raw_movie_mapper.csv"
+LOCAL_CSV_IMDB_MAPPER_FILE="/data/mapper/raw_imdb.csv"
+LOCAL_CSV_LINKER_FILE="data/streaming/raw_links.csv"
 
-print(f"Trying to access data at:\n{LOCAL_CSV_MOVIES_FILE}\n{LOCAL_CSV_REVIEWS_FILE}")
+# print(f"Trying to access data at:\n{LOCAL_CSV_MOVIES_FILE}\n{LOCAL_CSV_REVIEWS_FILE}")
 
 spark = SparkSession.builder \
     .appName("Data Pretransform") \
@@ -55,9 +56,12 @@ df_reviews = df_reviews.withColumn("creationDate", year("creationDate"))
 df_reviews = df_reviews.withColumnRenamed("id", "movie_id")
 
 df_mapper = spark.read.csv(path=LOCAL_CSV_MAPPER_FILE, header=True, inferSchema=True)
-df_mapper = df_mapper.drop('cast', 'crew')
+df_imdb_mapper = spark.read.csv(path=LOCAL_CSV_IMDB_MAPPER_FILE, header=True, inferSchema=True)
 
 df_movies = spark.read.csv(path=LOCAL_CSV_MOVIES_FILE, header=True, inferSchema=True)
+
+# df_imdb_mapper.show()
+# time.sleep(3)
 
 def movies_fix(df_movies: DataFrame) -> DataFrame:
     def fix_box_office(box_office):
@@ -80,16 +84,18 @@ def movies_fix(df_movies: DataFrame) -> DataFrame:
 df_movies = movies_fix(df_movies)
 df_movies = df_movies.drop('rating', 'ratingContents', 'distributor', 'soundMix')
 df_movies = df_movies.join(df_mapper, df_movies.title == df_mapper.title, "left") \
-                             .select(df_movies["*"], df_mapper["movie_id"])
-df_movies = df_movies \
-    .withColumnRenamed("movie_id", "tmdbId") \
-    .withColumnRenamed("id", "movie_id") \
+    .select(df_movies["*"], df_mapper["movie_id"].alias("tmdb_id"))
+df_movies = df_movies.join(df_imdb_mapper, df_movies.title == df_imdb_mapper.name, "left") \
+    .select(df_movies["*"], df_imdb_mapper["id"].substr(3, 10).cast("int").alias("imdb_id"))
 
-print(f"Trying to overwrite MOVIES on the following path: {MOVIES_PATH}")
+filtered_count = df_movies.filter((col("imdb_id").isNotNull()) | (col("tmdb_id").isNotNull())).count()
+total = df_movies.count()
+# df_movies.show()
+# print(f"Number of rows where imdb_id or tmdb_id is not null: {filtered_count}, total: {total}")
+# time.sleep(10)
+
+# print(f"Trying to overwrite MOVIES on the following path: {MOVIES_PATH}")
 df_movies.write.csv(path=MOVIES_PATH, header=True, mode="overwrite")
 
-print(f"Trying to overwrite REVIEWS on the following path: {REVIEWS_PATH}")
+# print(f"Trying to overwrite REVIEWS on the following path: {REVIEWS_PATH}")
 df_reviews.write.partitionBy("creationDate").csv(path=REVIEWS_PATH, header=True, mode="overwrite")
-
-print(f"Trying to overwrite MAPPER on the following path: {MAPPER_PATH}")
-df_mapper.write.csv(path=MAPPER_PATH, header=True, mode="overwrite")

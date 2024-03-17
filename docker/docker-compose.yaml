@@ -43,7 +43,7 @@ services:
       - 8080:8080
       - 7077:7077
     environment: 
-      - PYSPARf_PYTHON=python3
+      - PYSPARK_PYTHON=python3
       - KAFKA_BROKER=kafka:19092
     env_file:
       - ./hadoop.env
