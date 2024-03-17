@@ -13,11 +13,25 @@ KAFKA_CONFIGURATION = {
     "reconnect_backoff_ms": int(environ.get("KAFKA_RECONNECT_BACKOFF_MS", "100"))
 }
 
+spark = SparkSession.builder.appName("Streaming Reviews to Kafka").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")
+HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
+MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
+df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
+# Collect the DataFrame as a list of dictionaries
+movies_list = df_movies.collect()
+
+# Convert the list of dictionaries to a dictionary
+movies_dict = {row["imdb_id"]: row for row in movies_list}
+
 def send_partition_to_kafka(partition):
     producer = KafkaProducer(**KAFKA_CONFIGURATION)
     for row in partition:
         # Convert Row to dictionary
         row_dict = row.asDict()
+        if row_dict["imdbId"] not in movies_dict: 
+            continue
+        
         # Format current time
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Add current time to the row dictionary
@@ -38,8 +52,6 @@ def send_partition_to_kafka(partition):
 
 
 def main():
-    spark = SparkSession.builder.appName("Streaming Reviews to Kafka").getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR")
     df_reviews = spark.read.csv("/data/streaming/reviews.csv", header=True, inferSchema=True)
     df_reviews.foreachPartition(send_partition_to_kafka)
 
