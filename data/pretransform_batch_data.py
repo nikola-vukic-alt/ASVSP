@@ -81,6 +81,7 @@ def movies_fix(df_movies: DataFrame) -> DataFrame:
     
     return df_movies
 
+df_movies = df_movies.withColumnRenamed("id", "movie_id")
 df_movies = movies_fix(df_movies)
 df_movies = df_movies.drop('rating', 'ratingContents', 'distributor', 'soundMix')
 df_movies = df_movies.join(df_mapper, df_movies.title == df_mapper.title, "left") \

@@ -16,7 +16,7 @@ ELASTIC_SEARCH_INDEX = "streaming_query_5"
 def save_data(df, ELASTIC_SEARCH_INDEX):
     df \
         .writeStream \
-        .outputMode("update") \
+        .outputMode("append") \
         .format("console") \
         .option("truncate", "false") \
         .start()
@@ -30,7 +30,7 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option("es.net.http.auth.pass", ELASTIC_SEARCH_PASSWORD) \
         .option("mergeSchema", "true") \
         .option('es.index.auto.create', 'true') \
-        .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
+        .option('es.nodes', f'http://{ELASTIC_SEARCH_NODE}') \
         .option('es.port', ELASTIC_SEARCH_PORT) \
         .option('es.batch.write.retry.wait', '100s') \
         .start(ELASTIC_SEARCH_INDEX)
