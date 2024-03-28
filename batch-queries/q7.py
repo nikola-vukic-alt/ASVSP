@@ -8,9 +8,9 @@ spark = SparkSession.builder.appName("Batch Query 7").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
-MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
-REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/reviews/"
-OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/"
+MOVIES_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/movies/"
+REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/reviews/"
+OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/curated/batch/"
 ELASTIC_SEARCH_INDEX = "batch_query_7"
 
 df_movies = spark.read.csv(path=MOVIES_PATH, header=True, inferSchema=True)

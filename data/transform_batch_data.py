@@ -11,23 +11,25 @@ import time
 print("Current working directory:", os.getcwd())
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
+TRANSFORM_BASE_PATH = "/asvsp/transform/batch/"
 
-MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
-REVIEWS_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/reviews/"
+MOVIES_PATH = HDFS_NAMENODE + TRANSFORM_BASE_PATH + "movies/"
+REVIEWS_PATH = HDFS_NAMENODE + TRANSFORM_BASE_PATH + "reviews/"
 
-LOCAL_CSV_MOVIES_FILE="/data/batch/raw_rotten_tomatoes_movies.csv"
-LOCAL_CSV_REVIEWS_FILE="/data/batch/raw_rotten_tomatoes_movie_reviews.csv"
-LOCAL_CSV_MAPPER_FILE="/data/mapper/raw_movie_mapper.csv"
-LOCAL_CSV_IMDB_MAPPER_FILE="/data/mapper/raw_imdb.csv"
-LOCAL_CSV_LINKER_FILE="data/streaming/raw_links.csv"
+RAW_BASE_PATH = "/asvsp/raw/"
+RAW_ZONE_MOVIES_PATH = HDFS_NAMENODE + RAW_BASE_PATH + "movies/"
+RAW_ZONE_REVIEWS_PATH = HDFS_NAMENODE + RAW_BASE_PATH + "reviews/"
+RAW_ZONE_MAPPER_PATH = HDFS_NAMENODE + RAW_BASE_PATH + "mapper/"
+RAW_ZONE_IMDB_MOVIES_PATH = HDFS_NAMENODE + RAW_BASE_PATH + "movies_imdb/"
+RAW_ZONE_LINKS_PATH = HDFS_NAMENODE + RAW_BASE_PATH + "links/"
 
-# print(f"Trying to access data at:\n{LOCAL_CSV_MOVIES_FILE}\n{LOCAL_CSV_REVIEWS_FILE}")
+# print(f"Trying to access data at:\n{RAW_CSV_MOVIES_FILE}\n{RAW_CSV_REVIEWS_FILE}")
 
 spark = SparkSession.builder \
     .appName("Data Pretransform") \
     .getOrCreate()
 
-df_reviews = spark.read.csv(path=LOCAL_CSV_REVIEWS_FILE, header=True, inferSchema=True)
+df_reviews = spark.read.csv(path=RAW_ZONE_REVIEWS_PATH, header=True, inferSchema=True)
 
 def fix_reviews(df_reviews: DataFrame) -> DataFrame:
     
@@ -55,10 +57,10 @@ df_reviews = df_reviews.drop('criticName', 'reviewText', 'reviewUrl', 'publicati
 df_reviews = df_reviews.withColumn("creationDate", year("creationDate"))
 df_reviews = df_reviews.withColumnRenamed("id", "movie_id")
 
-df_mapper = spark.read.csv(path=LOCAL_CSV_MAPPER_FILE, header=True, inferSchema=True)
-df_imdb_mapper = spark.read.csv(path=LOCAL_CSV_IMDB_MAPPER_FILE, header=True, inferSchema=True)
+df_mapper = spark.read.csv(path=RAW_ZONE_MAPPER_PATH, header=True, inferSchema=True)
+df_imdb_mapper = spark.read.csv(path=RAW_ZONE_IMDB_MOVIES_PATH, header=True, inferSchema=True)
 
-df_movies = spark.read.csv(path=LOCAL_CSV_MOVIES_FILE, header=True, inferSchema=True)
+df_movies = spark.read.csv(path=RAW_ZONE_MOVIES_PATH, header=True, inferSchema=True)
 
 # df_imdb_mapper.show()
 # time.sleep(3)
