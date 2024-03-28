@@ -8,11 +8,14 @@ RUN apt-get update && \
 
 RUN java -version
 
-RUN pip install --no-cache-dir  pyspark==3.0.1 kafka-python
+RUN pip install --no-cache-dir  pyspark==3.0.1 kafka-python elasticsearch
 
 WORKDIR /usr/src/app
 
 COPY . .
+
+EXPOSE 9200
+EXPOSE 9300
 
 ENV KAFKA_BROKER="localhost:9092"
 ENV KAFKA_RECONNECT_BACKOFF_MS=100

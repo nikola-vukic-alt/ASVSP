@@ -1,13 +1,23 @@
 from pyspark.sql import SparkSession
 import time
+from os import environ
 
 spark = SparkSession.builder.appName("Streaming Reviews").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
+HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
+BASE_PATH = "/asvsp/raw/"
+
+RAW_ZONE_LINKS_PATH = HDFS_NAMENODE + BASE_PATH + "links/"
+RAW_ZONE_STREAMING_MOVIES_PATH = HDFS_NAMENODE + BASE_PATH + "streaming/movies/"
+RAW_ZONE_STREAMING_REVIEWS_PATH = HDFS_NAMENODE + BASE_PATH + "streaming/ratings/"
+
+OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/streaming/movies"
+
 # Read the dataframes
-df_reviews = spark.read.csv(path="/data/streaming/raw_ratings.csv", header=True, inferSchema=True)
-df_movies = spark.read.csv(path="/data/streaming/raw_movies.csv", header=True, inferSchema=True)
-df_links = spark.read.csv(path="/data/streaming/raw_links.csv", header=True, inferSchema=True)
+df_reviews = spark.read.csv(path=RAW_ZONE_STREAMING_REVIEWS_PATH, header=True, inferSchema=True)
+df_movies = spark.read.csv(path=RAW_ZONE_STREAMING_MOVIES_PATH, header=True, inferSchema=True)
+df_links = spark.read.csv(path=RAW_ZONE_LINKS_PATH, header=True, inferSchema=True)
 
 # Join df_reviews with df_links and df_movies based on the movieId column
 df_joined = df_reviews.join(df_links.select("movieId", "tmdbId", "imdbId"), "movieId").join(df_movies.select("movieId", "title", "genres"), "movieId")
@@ -25,4 +35,4 @@ df_reviews_final = df_joined.select("userId", "movieId", "rating", "title", "gen
 # time.sleep(10)
 
 # Write the final dataframe to a CSV file
-df_reviews_final.write.csv("/data/streaming/reviews.csv", header=True, mode="overwrite")
+df_reviews_final.write.csv(OUTPUT_PATH, header=True, mode="overwrite")

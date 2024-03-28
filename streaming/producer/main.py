@@ -5,6 +5,7 @@ from kafka import KafkaProducer
 import kafka.errors
 import time
 from json import dumps
+from elasticsearch import Elasticsearch
 
 KAFKA_CONFIGURATION = {
     "bootstrap_servers": environ.get("KAFKA_BROKER", "localhost:29092").split(","),
@@ -15,8 +16,11 @@ KAFKA_CONFIGURATION = {
 
 spark = SparkSession.builder.appName("Streaming Reviews to Kafka").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
+
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
-MOVIES_PATH = HDFS_NAMENODE + "/asvsp/raw/batch/movies/"
+MOVIES_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/movies/"
+STREAMING_SINK_PATH = HDFS_NAMENODE + "/streaming/sink"
+
 df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
 # Collect the DataFrame as a list of dictionaries
 movies_list = df_movies.collect()
@@ -24,7 +28,18 @@ movies_list = df_movies.collect()
 # Convert the list of dictionaries to a dictionary
 movies_dict = {row["imdb_id"]: row for row in movies_list}
 
+ELASTIC_SEARCH_INDEX = "streaming_sink"
+ELASTIC_SEARCH_NODE = environ.get("ELASTIC_SEARCH_NODE", "elasticsearch")
+ELASTIC_SEARCH_USERNAME = environ.get("ELASTIC_SEARCH_USERNAME", "elastic")
+ELASTIC_SEARCH_PASSWORD = environ.get("ELASTIC_SEARCH_PASSWORD", "password")
+ELASTIC_SEARCH_PORT = environ.get("ELASTIC_SEARCH_PORT", "9200")
+
 def send_partition_to_kafka(partition):
+    es = Elasticsearch(
+        hosts=[{"host": ELASTIC_SEARCH_NODE, "port": int(ELASTIC_SEARCH_PORT), "scheme": "http"}],
+        http_auth=(ELASTIC_SEARCH_USERNAME, ELASTIC_SEARCH_PASSWORD)
+    )
+
     producer = KafkaProducer(**KAFKA_CONFIGURATION)
     for row in partition:
         # Convert Row to dictionary
@@ -44,11 +59,21 @@ def send_partition_to_kafka(partition):
         
         print(f"Sending to Kafka - Key: {key}, Value: {value}")
         
+        # Send data to Kafka
         producer.send("reviews-topic", key=key, value=value)
+        
+        # Index data into Elasticsearch
+        try:
+            es.index(index=ELASTIC_SEARCH_INDEX, body=value)
+            print("Data indexed into Elasticsearch successfully.")
+        except Exception as e:
+            print(f"Error indexing data into Elasticsearch: {e}")
+
         time.sleep(1)
 
     producer.flush()
     producer.close()
+
 
 
 def main():
