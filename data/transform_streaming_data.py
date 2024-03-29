@@ -12,8 +12,6 @@ RAW_ZONE_LINKS_PATH = HDFS_NAMENODE + BASE_PATH + "links/"
 RAW_ZONE_STREAMING_MOVIES_PATH = HDFS_NAMENODE + BASE_PATH + "streaming/movies/"
 RAW_ZONE_STREAMING_REVIEWS_PATH = HDFS_NAMENODE + BASE_PATH + "streaming/ratings/"
 
-OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/streaming/movies"
-
 # Read the dataframes
 df_reviews = spark.read.csv(path=RAW_ZONE_STREAMING_REVIEWS_PATH, header=True, inferSchema=True)
 df_movies = spark.read.csv(path=RAW_ZONE_STREAMING_MOVIES_PATH, header=True, inferSchema=True)
@@ -35,4 +33,4 @@ df_reviews_final = df_joined.select("userId", "movieId", "rating", "title", "gen
 # time.sleep(10)
 
 # Write the final dataframe to a CSV file
-df_reviews_final.write.csv(OUTPUT_PATH, header=True, mode="overwrite")
+df_reviews_final.write.csv("/data/streaming/reviews.csv", header=True, mode="overwrite")
