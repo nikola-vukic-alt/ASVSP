@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, ArrayType, FloatType
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, FloatType
 from os import environ
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
@@ -54,16 +54,15 @@ spark = SparkSession \
 
 quiet_logs(spark)
 
-# Define a schema for the reviews data
 schema = StructType([
     StructField("userId", IntegerType(), True),
     StructField("movieId", IntegerType(), True),
     StructField("rating", FloatType(), True),
     StructField("imdbId", IntegerType(), True),
-    StructField("timestamp", TimestampType(), True)  
+    StructField("timestamp", TimestampType(), True),
+    StructField("title", StringType(), True)  
 ])
 
-# Load the streaming data from Kafka
 reviews = spark \
     .readStream \
     .format("kafka") \
@@ -71,10 +70,8 @@ reviews = spark \
     .option("subscribe", "reviews-topic") \
     .load()
 
-# Convert the value column from Kafka into a string
 reviews = reviews.withColumn("value", col("value").cast("string"))
 
-# Parse the JSON data from the value column
 reviews = reviews.withColumn("jsonData", from_json(col("value"), schema)).select("jsonData.*")
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
@@ -88,17 +85,34 @@ review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
         window(col("timestamp"), "10 minutes").alias("window"),
-        col("title"),
+        reviews["title"],
         (col("audienceScore") / 20.0).alias("rotten_tomatoes_rating"),
         col("rating").cast("float").alias("imdb_rating")
     ) \
     .na.drop() \
     .withWatermark("window", "10 minutes") \
-    .groupBy("window", "title") \
+    .groupBy("window", reviews["title"]) \
     .agg(
         round(avg("rotten_tomatoes_rating"), 2).alias("avg_rotten_tomatoes_rating"),
         round(avg("imdb_rating"), 2).alias("avg_imdb_rating")
-    ) 
+    )  
 
-save_data(review_ratings, ELASTIC_SEARCH_INDEX)
+elasticsearch_schema = StructType([
+    StructField("window", StructType([
+        StructField("start", TimestampType(), True),
+        StructField("end", TimestampType(), True)
+    ])),
+    StructField("title", StringType(), True),
+    StructField("avg_rotten_tomatoes_rating", FloatType(), True),
+    StructField("avg_imdb_rating", FloatType(), True)
+])
+
+review_ratings_with_schema = review_ratings.select(
+    col("window").cast(elasticsearch_schema["window"].dataType).alias("window"),
+    col("title"),
+    col("avg_rotten_tomatoes_rating"),
+    col("avg_imdb_rating")
+)
+
+save_data(review_ratings_with_schema, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()
