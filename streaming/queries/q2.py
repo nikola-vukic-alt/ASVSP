@@ -4,7 +4,7 @@ from pyspark.sql.types import StructType, StructField, IntegerType, StringType, 
 from os import environ
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
-OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/transform/streaming/"
+OUTPUT_PATH = HDFS_NAMENODE + "/asvsp/curated/streaming/"
 
 ELASTIC_SEARCH_NODE = environ.get("ELASTIC_SEARCH_NODE", "elasticsearch")
 ELASTIC_SEARCH_USERNAME = environ.get("ELASTIC_SEARCH_USERNAME", "elastic")

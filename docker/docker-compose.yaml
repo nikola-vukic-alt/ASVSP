@@ -76,6 +76,18 @@ services:
     env_file:
       - ./hadoop.env
 
+  spark-worker3:
+    image: bde2020/spark-worker:3.0.1-hadoop3.2
+    container_name: spark-worker3
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    ports:
+      - 8083:8081
+    env_file:
+      - ./hadoop.env
+
   ek-setup:
     build:
       context: ./ek/setup/
