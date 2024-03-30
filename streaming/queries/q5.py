@@ -80,7 +80,7 @@ MOVIES_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/movies/"
 df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
 
 # Ocjena filma na rotten tomatoes od strane publike (batch, normalizovana na 1-5 opseg) vs 
-# ocjena filma od strane publike na IMDB (streaming u prethodnih 10 minuta). Azurirano svakih 30 sekundi.
+# ocjena filma od strane publike na IMDB (streaming u prethodnih 2 minuta). Azurirano svakih 30 sekundi.
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
@@ -90,31 +90,7 @@ review_ratings = reviews \
         col("rating").cast("float").alias("imdb_rating")
     ) \
     .na.drop() \
-    .withWatermark("window", "2 minutes") \
-    .groupBy("window", reviews["title"]) \
-    .agg(
-        round(avg("rotten_tomatoes_rating"), 2).alias("avg_rotten_tomatoes_rating"),
-        round(avg("imdb_rating"), 2).alias("avg_imdb_rating")
-    )  
+    .withWatermark("window", "2 minutes")
 
-elasticsearch_schema = StructType([
-    StructField("window", StructType([
-        StructField("start", TimestampType(), True),
-        StructField("end", TimestampType(), True)
-    ])),
-    StructField("title", StringType(), True),
-    StructField("avg_rotten_tomatoes_rating", FloatType(), True),
-    StructField("avg_imdb_rating", FloatType(), True)
-])
-
-review_ratings_with_schema = review_ratings.select(
-    col("window").cast(elasticsearch_schema["window"].dataType).alias("window"),
-    col("title"),
-    col("avg_rotten_tomatoes_rating"),
-    col("avg_imdb_rating")
-)
-
-review_ratings_with_schema.printSchema()
-
-save_data(review_ratings_with_schema, ELASTIC_SEARCH_INDEX)
+save_data(review_ratings, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()

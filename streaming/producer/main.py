@@ -70,7 +70,7 @@ def send_partition_to_kafka(partition):
         # except Exception as e:
         #     print(f"Error indexing data into Elasticsearch: {e}")
 
-        time.sleep(1)
+        time.sleep(2)
 
     producer.flush()
     producer.close()

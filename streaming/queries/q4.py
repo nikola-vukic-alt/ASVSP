@@ -88,20 +88,15 @@ split_writers_udf = udf(lambda x: x.split(",") if x else [], ArrayType(StringTyp
 # Apply UDF to split writers column
 df_movies = df_movies.withColumn("writers_split", split_writers_udf("writer"))
 
-# Prosjecna ocjena pisaca koji su kritikovani u prehodnih 10 minuta. Azurirano svakih 30 sekundi.
+# Prosjecna ocjena pisaca koji su kritikovani u prehodnih 2 minuta. Azurirano svakih 30 sekundi.
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
-        window(col("timestamp"), "10 minutes").alias("window"),
+        window(col("timestamp"), "2 minutes").alias("window"),
         explode("writers_split").alias("wrtier_name"),
         col("rating").cast("float").alias("rating")
     ) \
-    .withWatermark("window", "10 minutes") \
-    .groupBy("window", "wrtier_name") \
-    .agg(
-        count("rating").alias("review_count"),
-        round(avg("rating"), 2).alias("avg_rating")
-    ) 
+    .withWatermark("window", "2 minutes") \
 
 save_data(review_ratings, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()

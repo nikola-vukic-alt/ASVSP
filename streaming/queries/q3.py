@@ -88,16 +88,15 @@ split_directors_udf = udf(lambda x: x.split(",") if x else [], ArrayType(StringT
 # Apply UDF to split directors column
 df_movies = df_movies.withColumn("directors_split", split_directors_udf("director"))
 
-# Reditelji filmova koji su kritikovani u prethodnih 3 minuta. Azurirano svakih 30 sekundi.
+# Reditelji filmova koji su kritikovani u prethodnih minut. Azurirano svakih 30 sekundi.
 review_counts = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
-        window(col("timestamp"), "3 minutes").alias("window"),
+        window(col("timestamp"), "1 minute").alias("window"),
         explode("directors_split").alias("director_name")
     ) \
-    .withWatermark("window", "3 minutes") \
-    .groupBy("window", "director_name") \
-    .count()
+    .na.drop() \
+    .withWatermark("window", "1 minute") 
 
 save_data(review_counts, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()
