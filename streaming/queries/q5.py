@@ -84,13 +84,13 @@ df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
-        window(col("timestamp"), "10 minutes").alias("window"),
+        window(col("timestamp"), "2 minutes").alias("window"),
         reviews["title"],
         (col("audienceScore") / 20.0).alias("rotten_tomatoes_rating"),
         col("rating").cast("float").alias("imdb_rating")
     ) \
     .na.drop() \
-    .withWatermark("window", "10 minutes") \
+    .withWatermark("window", "2 minutes") \
     .groupBy("window", reviews["title"]) \
     .agg(
         round(avg("rotten_tomatoes_rating"), 2).alias("avg_rotten_tomatoes_rating"),
@@ -113,6 +113,8 @@ review_ratings_with_schema = review_ratings.select(
     col("avg_rotten_tomatoes_rating"),
     col("avg_imdb_rating")
 )
+
+review_ratings_with_schema.printSchema()
 
 save_data(review_ratings_with_schema, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()
