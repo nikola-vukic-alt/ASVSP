@@ -32,19 +32,17 @@ df_certified = df_certified.filter(
 
 df_certified = df_certified.join(df_movies, "movie_id")
 
-df_top_movies = df_certified.orderBy(F.desc("total_reviews")).limit(10)
-
 print("QUERY: Kojih 10 certified fresh filmova ima najvise kritika?\n")
-df_top_movies.dropDuplicates(["title"]).select("title", "total_reviews").show()
+df_certified.select("title", "total_reviews").drop_duplicates(["title"]).orderBy(F.desc("total_reviews")).limit(10).show()
 
-df_top_movies.write.json(OUTPUT_PATH + ELASTIC_SEARCH_INDEX, mode="overwrite")
+df_certified.write.json(OUTPUT_PATH + ELASTIC_SEARCH_INDEX, mode="overwrite")
 
 ELASTIC_SEARCH_NODE = environ.get("ELASTIC_SEARCH_NODE", "elasticsearch")
 ELASTIC_SEARCH_USERNAME = environ.get("ELASTIC_SEARCH_USERNAME", "elastic")
 ELASTIC_SEARCH_PASSWORD = environ.get("ELASTIC_SEARCH_PASSWORD", "password")
 ELASTIC_SEARCH_PORT = environ.get("ELASTIC_SEARCH_PORT", "9200")
 
-df_top_movies.write \
+df_certified.write \
     .format("org.elasticsearch.spark.sql") \
     .mode("overwrite") \
     .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \

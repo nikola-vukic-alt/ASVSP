@@ -77,10 +77,10 @@ reviews = reviews.withColumn("value", col("value").cast("string"))
 # Parse the JSON data from the value column
 reviews = reviews.withColumn("jsonData", from_json(col("value"), schema)).select("jsonData.*")
 
-# Koji filmovi kritikovani u prethodnih 3 minuta? Azurirano svakih 30 sekundi.
+# Koji filmovi kritikovani u prethodnih minut? Azurirano svakih 30 sekundi.
 review_counts = reviews \
-    .withWatermark("timestamp", "3 minutes") \
-    .groupBy(window("timestamp", "3 minutes", "30 seconds"), "movieId", "title") \
+    .withWatermark("timestamp", "1 minute") \
+    .groupBy(window("timestamp", "1 minute", "30 seconds"), "movieId", "title") \
     .count()
 
 save_data(review_counts, ELASTIC_SEARCH_INDEX)
