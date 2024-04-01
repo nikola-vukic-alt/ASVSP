@@ -13,6 +13,7 @@ ELASTIC_SEARCH_PORT = environ.get("ELASTIC_SEARCH_PORT", "9200")
 
 ELASTIC_SEARCH_INDEX = "streaming_query_4"
 
+
 def save_data(df, ELASTIC_SEARCH_INDEX):
     df \
         .writeStream \
@@ -21,9 +22,11 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option("truncate", "false") \
         .start()
 
-    df \
+    df_with_doc_id = df.withColumn("doc_id", col("writer_name"))
+
+    df_with_doc_id \
         .writeStream \
-        .outputMode("append") \
+        .outputMode("update") \
         .option("checkpointLocation", "/tmp/EL_" + ELASTIC_SEARCH_INDEX) \
         .format('org.elasticsearch.spark.sql') \
         .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \
@@ -33,6 +36,7 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
         .option('es.port', ELASTIC_SEARCH_PORT) \
         .option('es.batch.write.retry.wait', '100s') \
+        .option("es.mapping.id", "doc_id") \
         .start(ELASTIC_SEARCH_INDEX)
     
     df.writeStream \
@@ -93,10 +97,16 @@ review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
         window(col("timestamp"), "2 minutes").alias("window"),
-        explode("writers_split").alias("wrtier_name"),
+        explode("writers_split").alias("writer_name"),
         col("rating").cast("float").alias("rating")
     ) \
     .withWatermark("window", "2 minutes") \
+    .groupBy("window", "writer_name") \
+    .agg(
+        count("rating").alias("review_count"),
+        round(avg("rating"), 2).alias("avg_rating")
+    ) \
+    .withWatermark("window", "2 minutes")
 
 save_data(review_ratings, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()

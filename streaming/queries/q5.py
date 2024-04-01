@@ -21,18 +21,24 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option("truncate", "false") \
         .start()
 
-    df \
+    def generate_doc_id(window, title):
+        return concat_ws("_", window.start, window.end, title)
+
+    df_with_doc_id = df.withColumn("doc_id", generate_doc_id(col("window"), col("title")))
+
+    df_with_doc_id \
         .writeStream \
-        .outputMode("append") \
+        .outputMode("update") \
         .option("checkpointLocation", "/tmp/EL_" + ELASTIC_SEARCH_INDEX) \
         .format('org.elasticsearch.spark.sql') \
         .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \
         .option("es.net.http.auth.pass", ELASTIC_SEARCH_PASSWORD) \
         .option("mergeSchema", "true") \
         .option('es.index.auto.create', 'true') \
-        .option('es.nodes', f'http://{ELASTIC_SEARCH_NODE}') \
+        .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
         .option('es.port', ELASTIC_SEARCH_PORT) \
         .option('es.batch.write.retry.wait', '100s') \
+        .option("es.mapping.id", "doc_id") \
         .start(ELASTIC_SEARCH_INDEX)
     
     df.writeStream \
@@ -85,11 +91,17 @@ review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
         window(col("timestamp"), "2 minutes", "30 seconds").alias("window"),
-        reviews["title"],
+        reviews["title"].alias("title"),
         (col("audienceScore") / 20.0).alias("rotten_tomatoes_rating"),
         col("rating").cast("float").alias("imdb_rating")
     ) \
     .na.drop() \
+    .withWatermark("window", "2 minutes") \
+    .groupBy("window","title") \
+    .agg(
+        round(avg("imdb_rating"), 2).alias("avg_imdb_rating"),
+        round(avg("rotten_tomatoes_rating"), 2).alias("avg_rotten_tomatoes_rating")
+    ) \
     .withWatermark("window", "2 minutes")
 
 save_data(review_ratings, ELASTIC_SEARCH_INDEX)

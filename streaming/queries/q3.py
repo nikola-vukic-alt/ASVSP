@@ -21,9 +21,11 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option("truncate", "false") \
         .start()
 
-    df \
+    df_with_doc_id = df.withColumn("doc_id", col("director_name"))
+
+    df_with_doc_id \
         .writeStream \
-        .outputMode("append") \
+        .outputMode("update") \
         .option("checkpointLocation", "/tmp/EL_" + ELASTIC_SEARCH_INDEX) \
         .format('org.elasticsearch.spark.sql') \
         .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \
@@ -33,6 +35,7 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
         .option('es.port', ELASTIC_SEARCH_PORT) \
         .option('es.batch.write.retry.wait', '100s') \
+        .option("es.mapping.id", "doc_id") \
         .start(ELASTIC_SEARCH_INDEX)
     
     df.writeStream \
@@ -96,7 +99,9 @@ review_counts = reviews \
         explode("directors_split").alias("director_name")
     ) \
     .na.drop() \
-    .withWatermark("window", "1 minute") 
+    .withWatermark("window", "1 minute") \
+    .groupBy("window", "director_name") \
+    .count()
 
 save_data(review_counts, ELASTIC_SEARCH_INDEX)
 spark.streams.awaitAnyTermination()

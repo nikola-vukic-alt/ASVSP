@@ -22,8 +22,6 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .start()
 
     def generate_doc_id(genre, language):
-        # start = window.start
-        # end = window.end
         return concat_ws("_", genre, language)
 
     df_with_doc_id = df.withColumn("doc_id", generate_doc_id(col("genre"), col("language")))
