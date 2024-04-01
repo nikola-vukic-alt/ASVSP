@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, TimestampType
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, FloatType, TimestampType
 from os import environ
 
 HDFS_NAMENODE = environ.get("CORE_CONF_fs_defaultFS", "hdfs://namenode:9000")
@@ -21,9 +21,16 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option("truncate", "false") \
         .start()
 
-    df \
+    def generate_doc_id(genre, language):
+        # start = window.start
+        # end = window.end
+        return concat_ws("_", genre, language)
+
+    df_with_doc_id = df.withColumn("doc_id", generate_doc_id(col("genre"), col("language")))
+
+    df_with_doc_id \
         .writeStream \
-        .outputMode("append") \
+        .outputMode("update") \
         .option("checkpointLocation", "/tmp/EL_" + ELASTIC_SEARCH_INDEX) \
         .format('org.elasticsearch.spark.sql') \
         .option("es.net.http.auth.user", ELASTIC_SEARCH_USERNAME) \
@@ -33,6 +40,7 @@ def save_data(df, ELASTIC_SEARCH_INDEX):
         .option('es.nodes', 'http://{}'.format(ELASTIC_SEARCH_NODE)) \
         .option('es.port', ELASTIC_SEARCH_PORT) \
         .option('es.batch.write.retry.wait', '100s') \
+        .option("es.mapping.id", "doc_id") \
         .start(ELASTIC_SEARCH_INDEX)
     
     df.writeStream \
@@ -59,7 +67,8 @@ schema = StructType([
     StructField("userId", IntegerType(), True),
     StructField("movieId", IntegerType(), True),
     StructField("title", StringType(), True),
-    StructField("genres", StringType(), True),
+    StructField("rating", FloatType(), True),
+    StructField("imdbId", IntegerType(), True),
     StructField("timestamp", TimestampType(), True)  
 ])
 
@@ -78,17 +87,29 @@ reviews = reviews.withColumn("value", col("value").cast("string"))
 reviews = reviews.withColumn("jsonData", from_json(col("value"), schema)).select("jsonData.*")
 
 # Split the genres field and explode it into separate genre entries
-reviews = reviews.withColumn("genre", explode(split(trim(col("genres")), "\\|")))
 
-# Zanrovi kritikovani u prethodnih 3 minuta, sa azuriranjima na svakih 30 sekundi
-review_counts = reviews \
-    .withWatermark("timestamp", "3 minutes") \
-    .groupBy(
-        window(col("timestamp"), "3 minutes", "30 seconds"),
-        col("genre")
+MOVIES_PATH = HDFS_NAMENODE + "/asvsp/transform/batch/movies/"
+
+df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
+
+# df_movies = df_movies.withColumn("genre", explode(split(trim(col("genre")), "\\|")))
+
+review_ratings = reviews \
+    .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
+    .withColumn("language", when(col("originalLanguage") == "English", "English").otherwise("Non-English")) \
+    .select(
+        window(col("timestamp"), "3 minutes").alias("window"),
+        explode(split(col("genre"), ",")).alias("genre"),  
+        col("language"),
+        col("rating")
     ) \
-    .count() \
+    .withColumn("genre", trim(col("genre"))) \
+    .na.drop() \
+    .withWatermark("window", "3 minutes") \
+    .groupBy("window", "genre", "language") \
+    .agg(avg("rating").alias("rating")) \
+    .withWatermark("window", "3 minutes") 
 
-save_data(review_counts, ELASTIC_SEARCH_INDEX)
+save_data(review_ratings, ELASTIC_SEARCH_INDEX)
 
 spark.streams.awaitAnyTermination()

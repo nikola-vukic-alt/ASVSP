@@ -88,7 +88,7 @@ split_directors_udf = udf(lambda x: x.split(",") if x else [], ArrayType(StringT
 # Apply UDF to split directors column
 df_movies = df_movies.withColumn("directors_split", split_directors_udf("director"))
 
-# Reditelji filmova koji su kritikovani u prethodnih minut. Azurirano svakih 30 sekundi.
+# Reditelji filmova koji su kritikovani u prethodnih minut.
 review_counts = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(

@@ -84,7 +84,7 @@ df_movies = spark.read.csv(MOVIES_PATH, header=True, inferSchema=True)
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
-        window(col("timestamp"), "2 minutes").alias("window"),
+        window(col("timestamp"), "2 minutes", "30 seconds").alias("window"),
         reviews["title"],
         (col("audienceScore") / 20.0).alias("rotten_tomatoes_rating"),
         col("rating").cast("float").alias("imdb_rating")

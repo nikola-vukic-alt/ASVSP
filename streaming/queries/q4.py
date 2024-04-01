@@ -88,7 +88,7 @@ split_writers_udf = udf(lambda x: x.split(",") if x else [], ArrayType(StringTyp
 # Apply UDF to split writers column
 df_movies = df_movies.withColumn("writers_split", split_writers_udf("writer"))
 
-# Prosjecna ocjena pisaca koji su kritikovani u prehodnih 2 minuta. Azurirano svakih 30 sekundi.
+# Prosjecna ocjena pisaca koji su kritikovani u prehodnih 2 minuta.
 review_ratings = reviews \
     .join(df_movies, reviews.imdbId == df_movies.imdb_id, "left") \
     .select(
