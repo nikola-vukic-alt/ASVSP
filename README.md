@@ -6,8 +6,7 @@ Projekat iz Arhitekture sistema velikih skupova podataka.
 
 ## Opis sistema
 
-Podaci su učitavani iz CSV formata u **raw zonu** na _HDFS_ pomoću _Pyspark_ alata.
-
+Podaci su učitavani iz CSV formata u **raw zonu** na _HDFS_ pomoću _Pyspark_ alata.<br>
 Potom, pomoću _Python_ skripte "transform_batch_data.py" su prebačeni u **transformation zonu** na _HDFS_.
 
 ### Batch obrada
