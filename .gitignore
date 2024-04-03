@@ -2,3 +2,4 @@ data/batch/*
 data/mapper/*
 data/streaming/*
 .mypy_*
+pictures
