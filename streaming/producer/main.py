@@ -62,8 +62,6 @@ def send_partition_to_kafka(partition):
         # Send data to Kafka
         producer.send("reviews-topic", key=key, value=value)
         
-        # TODO : OTKOMENTARISI MAJMUNE
-        # Index data into Elasticsearch
         # try:
         #     es.index(index=ELASTIC_SEARCH_INDEX, body=value)
         #     print("Data indexed into Elasticsearch successfully.")
